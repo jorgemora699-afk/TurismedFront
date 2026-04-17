@@ -1,22 +1,22 @@
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+  import axios from 'axios';
+  import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://10.13.210.140:5000';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-const client = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+  const client = axios.create({
+    baseURL: API_URL,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
 
-// Interceptor: agrega el token JWT automáticamente a cada request
-client.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+  // Interceptor: agrega el token JWT automáticamente a cada request
+  client.interceptors.request.use(async (config) => {
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
 
-export default client;
+  export default client;
