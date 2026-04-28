@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -15,6 +15,7 @@ import PromotionsScreen from '../screens/Promotions/PromotionsScreen';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
 import AdminScreen from '../screens/Admin/AdminScreen';
 import PlaceDetailScreen from '../screens/Places/PlaceDetailScreen';
+import SplashScreen from '../screens/Auth/SplashScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -76,20 +77,54 @@ const AuthStack = () => (
   </Stack.Navigator>
 );
 
+// Stack para usuario logueado que aún no completó el cuestionario
+const OnboardingStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="Questionnaire" component={QuestionnaireScreen} />
+  </Stack.Navigator>
+);
+
 const AppNavigator = () => {
   const { user, loading } = useAuth();
+  const [splashDone, setSplashDone] = useState(false);
 
+  // 1️⃣ Splash
+  if (!splashDone) {
+    return <SplashScreen onFinish={() => setSplashDone(true)} />;
+  }
+
+  // 2️⃣ AuthContext verificando token guardado
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#E85D04" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a1628' }}>
+        <ActivityIndicator size="large" color="#1ad4c0" />
       </View>
     );
   }
 
+  // 3️⃣ Sin sesión → Login / Register
+  if (!user) {
+    return (
+      <NavigationContainer>
+        <AuthStack />
+      </NavigationContainer>
+    );
+  }
+
+  // 4️⃣ Logueado pero sin cuestionario → Onboarding obligatorio
+  // ⚠️ Cambia 'has_questionnaire' por el campo real que devuelve tu backend
+  if (!user.has_questionnaire) {
+    return (
+      <NavigationContainer>
+        <OnboardingStack />
+      </NavigationContainer>
+    );
+  }
+
+  // 5️⃣ Todo completo → App principal
   return (
     <NavigationContainer>
-      {user ? <MainTabs isAdmin={user?.role === 'admin'} /> : <AuthStack />}
+      <MainTabs isAdmin={user?.role === 'admin'} />
     </NavigationContainer>
   );
 };
