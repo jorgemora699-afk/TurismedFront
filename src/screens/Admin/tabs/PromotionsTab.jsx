@@ -7,40 +7,36 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../../api/client';
 
-const PromotionsTab = () => {
-  const [promotions, setPromotions] = useState([]);
-  const [places, setPlaces] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [saving, setSaving] = useState(false);
+const DISCOUNT_PRESETS = [10, 15, 20, 25, 30, 50];
+const USES_PRESETS     = [1, 5, 10, 25, 50, 100];
 
-  const [code, setCode] = useState('');
-  const [description, setDescription] = useState('');
+const PromotionsTab = () => {
+  const [promotions, setPromotions]     = useState([]);
+  const [places, setPlaces]             = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [saving, setSaving]             = useState(false);
+
+  const [code, setCode]                           = useState('');
+  const [description, setDescription]             = useState('');
   const [discountPercentage, setDiscountPercentage] = useState('');
-  const [maxUses, setMaxUses] = useState('1');
-  const [selectedPlaceId, setSelectedPlaceId] = useState(null);
+  const [maxUses, setMaxUses]                     = useState('1');
+  const [selectedPlaceId, setSelectedPlaceId]     = useState(null);
 
   useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
+    useCallback(() => { loadData(); }, [])
   );
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [promoResponse, placesResponse] = await Promise.all([
+      const [promoRes, placesRes] = await Promise.all([
         client.get('/promotions/active'),
         client.get('/places'),
       ]);
-
-      if (promoResponse.data.success) {
-        setPromotions(promoResponse.data.data.promotions);
-      }
-      if (placesResponse.data.success) {
-        setPlaces(placesResponse.data.data.places);  // ← CAMBIO: .places al final
-      }
-    } catch (error) {
+      if (promoRes.data.success)  setPromotions(promoRes.data.data.promotions);
+      if (placesRes.data.success) setPlaces(placesRes.data.data.places);
+    } catch {
       Alert.alert('Error', 'No se pudieron cargar las promociones');
     } finally {
       setLoading(false);
@@ -48,11 +44,8 @@ const PromotionsTab = () => {
   };
 
   const openCreate = () => {
-    setCode('');
-    setDescription('');
-    setDiscountPercentage('');
-    setMaxUses('1');
-    setSelectedPlaceId(null);
+    setCode(''); setDescription(''); setDiscountPercentage('');
+    setMaxUses('1'); setSelectedPlaceId(null);
     setModalVisible(true);
   };
 
@@ -61,7 +54,6 @@ const PromotionsTab = () => {
       Alert.alert('Error', 'Código y descripción son obligatorios');
       return;
     }
-
     setSaving(true);
     try {
       const response = await client.post('/promotions/generate', {
@@ -71,7 +63,6 @@ const PromotionsTab = () => {
         max_uses: parseInt(maxUses) || 1,
         place_id: selectedPlaceId,
       });
-
       if (response.data.success) {
         Alert.alert('¡Listo!', 'Promoción creada exitosamente');
         setModalVisible(false);
@@ -84,75 +75,126 @@ const PromotionsTab = () => {
     }
   };
 
-  const handleDelete = async (promoId, promoCode) => {
-    Alert.alert(
-      'Eliminar promoción',
-      `¿Estás seguro de eliminar la promoción ${promoCode}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await client.delete(`/promotions/${promoId}`);
-              console.log('Delete response:', JSON.stringify(response.data));
-              if (response.data.success) {
-                Alert.alert('Listo', 'Promoción eliminada');
-                loadData();
-              }
-            } catch (error) {
-              console.log('Delete error:', JSON.stringify(error.response?.data));
-              Alert.alert('Error', error.response?.data?.message || 'No se pudo eliminar');
-            }
+  const handleDelete = (promoId, promoCode) => {
+    Alert.alert('Eliminar promoción', `¿Eliminar la promoción "${promoCode}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar', style: 'destructive',
+        onPress: async () => {
+          try {
+            const response = await client.delete(`/promotions/${promoId}`);
+            if (response.data.success) { Alert.alert('Listo', 'Promoción eliminada'); loadData(); }
+          } catch (error) {
+            Alert.alert('Error', error.response?.data?.message || 'No se pudo eliminar');
           }
         }
-      ]
-    );
+      }
+    ]);
   };
 
-  const renderPromotion = ({ item }) => (
-    <View style={styles.card}>
-      <View style={styles.cardLeft}>
-        <Text style={styles.emoji}>🎁</Text>
-        <View style={styles.info}>
-          <Text style={styles.code}>{item.code}</Text>
-          <Text style={styles.description}>{item.description}</Text>
-          {item.place_name && <Text style={styles.place}>📍 {item.place_name}</Text>}
-          <View style={styles.statsRow}>
-            {item.discount_percentage && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{item.discount_percentage}% OFF</Text>
+  // Porcentaje de uso para la barra
+  const usagePercent = (item) =>
+    item.max_uses > 0 ? Math.min(item.current_uses / item.max_uses, 1) : 0;
+
+  const renderPromotion = ({ item }) => {
+    const pct = usagePercent(item);
+    const isAlmostFull = pct >= 0.8;
+    const isFull = pct >= 1;
+
+    return (
+      <View style={styles.card}>
+        {/* Sidebar degradado */}
+        <View style={[styles.cardSidebar, isFull && { backgroundColor: '#aaa' }]} />
+
+        <View style={styles.cardBody}>
+          {/* Ícono */}
+          <View style={[styles.iconCircle, isFull && { backgroundColor: '#f0f0f0' }]}>
+            <Text style={styles.iconEmoji}>{isFull ? '✅' : '🎁'}</Text>
+          </View>
+
+          <View style={styles.info}>
+            {/* Código */}
+            <View style={styles.codeRow}>
+              <Text style={[styles.code, isFull && { color: '#aaa' }]}>{item.code}</Text>
+              {item.discount_percentage && (
+                <View style={[styles.discountBadge, isFull && { backgroundColor: '#f0f0f0' }]}>
+                  <Text style={[styles.discountText, isFull && { color: '#aaa' }]}>
+                    {item.discount_percentage}% OFF
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.promoDesc} numberOfLines={2}>{item.description}</Text>
+
+            {item.place_name && (
+              <View style={styles.detailRow}>
+                <Ionicons name="location-outline" size={11} color="#aaa" />
+                <Text style={styles.detailText}>{item.place_name}</Text>
               </View>
             )}
-            <Text style={styles.uses}>{item.current_uses}/{item.max_uses} usos</Text>
+
+            {/* Barra de usos */}
+            <View style={styles.usageContainer}>
+              <View style={styles.usageTrack}>
+                <View style={[
+                  styles.usageFill,
+                  { width: `${pct * 100}%` },
+                  isAlmostFull && { backgroundColor: '#e53935' },
+                  isFull && { backgroundColor: '#aaa' },
+                ]} />
+              </View>
+              <Text style={[styles.usageLabel, isAlmostFull && !isFull && { color: '#e53935' }]}>
+                {item.current_uses}/{item.max_uses} usos
+              </Text>
+            </View>
           </View>
+
+          {/* Botón eliminar */}
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => handleDelete(item.id, item.code)}
+          >
+            <Ionicons name="trash" size={15} color="#e53935" />
+          </TouchableOpacity>
         </View>
       </View>
-      <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => handleDelete(item.id, item.code)}
-      >
-        <Ionicons name="trash-outline" size={18} color="#e53935" />
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#E85D04" />
+        <Text style={styles.loadingText}>Cargando promociones…</Text>
       </View>
     );
   }
 
+  const activeCount = promotions.filter(p => p.current_uses < p.max_uses).length;
+  const totalUses   = promotions.reduce((acc, p) => acc + p.current_uses, 0);
+
   return (
     <View style={styles.container}>
+      {/* Stats bar */}
       <View style={styles.statsBar}>
-        <Text style={styles.statsText}>Total: {promotions.length} promociones</Text>
-        <TouchableOpacity style={styles.addButton} onPress={openCreate}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{promotions.length}</Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{activeCount}</Text>
+          <Text style={styles.statLabel}>Activas</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{totalUses}</Text>
+          <Text style={styles.statLabel}>Usos totales</Text>
+        </View>
+        <TouchableOpacity style={styles.addBtn} onPress={openCreate} activeOpacity={0.85}>
           <Ionicons name="add" size={18} color="#fff" />
-          <Text style={styles.addButtonText}>Crear</Text>
+          <Text style={styles.addBtnText}>Crear</Text>
         </TouchableOpacity>
       </View>
 
@@ -162,8 +204,16 @@ const PromotionsTab = () => {
         renderItem={renderPromotion}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={{ fontSize: 48, marginBottom: 12 }}>🎁</Text>
+            <Text style={styles.emptyTitle}>Sin promociones aún</Text>
+            <Text style={styles.emptyText}>Crea tu primera promoción para los usuarios</Text>
+          </View>
+        }
       />
 
+      {/* Modal crear */}
       <Modal
         visible={modalVisible}
         transparent
@@ -171,69 +221,148 @@ const PromotionsTab = () => {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Nueva Promoción</Text>
+          <View style={styles.modalHandle} />
+          <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
+
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIcon}>
+                <Text style={{ fontSize: 26 }}>🎁</Text>
+              </View>
+              <View>
+                <Text style={styles.modalTitle}>Nueva Promoción</Text>
+                <Text style={styles.modalSubtitle}>Completa los datos del cupón</Text>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
 
             <Text style={styles.label}>Código *</Text>
-            <TextInput
-              style={styles.input}
-              value={code}
-              onChangeText={setCode}
-              placeholder="Ej: TURIS20"
-              autoCapitalize="characters"
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="pricetag-outline" size={18} color="#aaa" style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, { letterSpacing: 2, fontWeight: '700' }]}
+                value={code}
+                onChangeText={setCode}
+                placeholder="Ej: TURIS20"
+                placeholderTextColor="#ccc"
+                autoCapitalize="characters"
+              />
+            </View>
 
             <Text style={styles.label}>Descripción *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.inputDirect, styles.textArea]}
               value={description}
               onChangeText={setDescription}
               placeholder="Descripción de la promoción"
+              placeholderTextColor="#ccc"
+              multiline
+              numberOfLines={2}
             />
 
-            <Text style={styles.label}>Descuento (%)</Text>
-            <TextInput
-              style={styles.input}
-              value={discountPercentage}
-              onChangeText={setDiscountPercentage}
-              placeholder="Ej: 20"
-              keyboardType="numeric"
-            />
+            {/* Descuento presets */}
+            <Text style={styles.sectionLabel}>Descuento (%)</Text>
+            <View style={styles.chipRow}>
+              {DISCOUNT_PRESETS.map(d => (
+                <TouchableOpacity
+                  key={d}
+                  style={[styles.chip, discountPercentage === String(d) && styles.chipActive]}
+                  onPress={() => setDiscountPercentage(String(d))}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.chipText, discountPercentage === String(d) && styles.chipTextActive]}>
+                    {d}%
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="trending-down-outline" size={18} color="#aaa" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                value={discountPercentage}
+                onChangeText={setDiscountPercentage}
+                placeholder="O escribe un valor personalizado"
+                placeholderTextColor="#ccc"
+                keyboardType="numeric"
+              />
+            </View>
 
-            <Text style={styles.label}>Máximo de usos</Text>
-            <TextInput
-              style={styles.input}
-              value={maxUses}
-              onChangeText={setMaxUses}
-              placeholder="1"
-              keyboardType="numeric"
-            />
+            {/* Usos presets */}
+            <Text style={styles.sectionLabel}>Máximo de usos</Text>
+            <View style={styles.chipRow}>
+              {USES_PRESETS.map(u => (
+                <TouchableOpacity
+                  key={u}
+                  style={[styles.chip, maxUses === String(u) && styles.chipActive]}
+                  onPress={() => setMaxUses(String(u))}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.chipText, maxUses === String(u) && styles.chipTextActive]}>
+                    {u}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="people-outline" size={18} color="#aaa" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                value={maxUses}
+                onChangeText={setMaxUses}
+                placeholder="O escribe un valor personalizado"
+                placeholderTextColor="#ccc"
+                keyboardType="numeric"
+              />
+            </View>
 
-            <Text style={styles.label}>Lugar</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.placesScroll}>
+            {/* Seleccionar lugar */}
+            <Text style={styles.sectionLabel}>Lugar (opcional)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+              <TouchableOpacity
+                style={[styles.placeChip, selectedPlaceId === null && styles.chipActive]}
+                onPress={() => setSelectedPlaceId(null)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.chipText, selectedPlaceId === null && styles.chipTextActive]}>
+                  🌐 Todos
+                </Text>
+              </TouchableOpacity>
               {places.map(place => (
                 <TouchableOpacity
                   key={place.id}
-                  style={[styles.placeButton, selectedPlaceId === place.id && styles.placeButtonActive]}
+                  style={[styles.placeChip, selectedPlaceId === place.id && styles.chipActive]}
                   onPress={() => setSelectedPlaceId(place.id)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.placeButtonText, selectedPlaceId === place.id && styles.placeButtonTextActive]}>
-                    {place.name}
+                  <Text style={[styles.chipText, selectedPlaceId === place.id && styles.chipTextActive]}>
+                    📍 {place.name}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
+            <TouchableOpacity
+              style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+              onPress={handleSave}
+              disabled={saving}
+              activeOpacity={0.85}
+            >
               {saving
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.saveButtonText}>Crear promoción</Text>
+                : <>
+                    <Ionicons name="add-circle" size={18} color="#fff" />
+                    <Text style={styles.saveBtnText}>Crear promoción</Text>
+                  </>
               }
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
               <Text style={styles.cancelText}>Cancelar</Text>
             </TouchableOpacity>
+
+            <View style={{ height: 32 }} />
           </ScrollView>
         </View>
       </Modal>
@@ -242,100 +371,122 @@ const PromotionsTab = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9f9f9' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  loadingText: { fontSize: 14, color: '#aaa' },
+
+  /* Stats */
   statsBar: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    gap: 16,
   },
-  statsText: { fontSize: 13, color: '#666', fontWeight: '500' },
-  addButton: {
+  statItem: { alignItems: 'center' },
+  statNumber: { fontSize: 20, fontWeight: '900', color: '#E85D04' },
+  statLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
+  statDivider: { width: 1, backgroundColor: '#eee', height: 28 },
+  addBtn: {
+    marginLeft: 'auto',
     backgroundColor: '#E85D04',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
     borderRadius: 20,
     gap: 4,
+    shadowColor: '#E85D04',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  addButtonText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-  list: { padding: 16 },
+  addBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
+  /* Lista */
+  list: { padding: 16, gap: 10 },
+
+  /* Empty state */
+  emptyState: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: '#333', marginBottom: 8 },
+  emptyText: { fontSize: 14, color: '#aaa', textAlign: 'center', lineHeight: 20 },
+
+  /* Tarjeta */
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  cardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  emoji: { fontSize: 28, marginRight: 12 },
-  info: { flex: 1 },
-  code: { fontSize: 15, fontWeight: 'bold', color: '#E85D04', letterSpacing: 1 },
-  description: { fontSize: 13, color: '#333', marginBottom: 4 },
-  place: { fontSize: 12, color: '#999', marginBottom: 4 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  badge: {
+  cardSidebar: { width: 4, backgroundColor: '#E85D04' },
+  cardBody: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', padding: 14, gap: 12 },
+  iconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     backgroundColor: '#fff3e0',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  badgeText: { fontSize: 11, color: '#E85D04', fontWeight: '600' },
-  uses: { fontSize: 12, color: '#999' },
-  deleteButton: { padding: 8 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    maxHeight: '90%',
-  },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 20 },
-  label: { fontSize: 13, color: '#666', marginBottom: 6, fontWeight: '500' },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 16,
-    fontSize: 15,
-  },
-  placesScroll: { marginBottom: 20 },
-  placeButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
-    marginRight: 8,
-  },
-  placeButtonActive: { backgroundColor: '#E85D04', borderColor: '#E85D04' },
-  placeButtonText: { fontSize: 13, color: '#666' },
-  placeButtonTextActive: { color: '#fff', fontWeight: '600' },
-  saveButton: {
-    backgroundColor: '#E85D04',
-    padding: 16,
-    borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
   },
-  saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  cancelButton: { padding: 12, alignItems: 'center', marginBottom: 20 },
-  cancelText: { color: '#666', fontSize: 15 },
+  iconEmoji: { fontSize: 22 },
+  info: { flex: 1 },
+  codeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  code: { fontSize: 16, fontWeight: '900', color: '#E85D04', letterSpacing: 1.5 },
+  discountBadge: { backgroundColor: '#fff3e0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  discountText: { fontSize: 11, color: '#E85D04', fontWeight: '700' },
+  promoDesc: { fontSize: 13, color: '#555', lineHeight: 18, marginBottom: 6 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
+  detailText: { fontSize: 12, color: '#aaa' },
+
+  /* Barra de usos */
+  usageContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  usageTrack: { flex: 1, height: 5, backgroundColor: '#f0f0f0', borderRadius: 3, overflow: 'hidden' },
+  usageFill: { height: '100%', backgroundColor: '#E85D04', borderRadius: 3 },
+  usageLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', minWidth: 50, textAlign: 'right' },
+
+  deleteBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#ffebee', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+
+  /* Modal */
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  modalHandle: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '92%' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
+  modalIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: '#fff3e0', alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#1a1a1a' },
+  modalSubtitle: { fontSize: 13, color: '#aaa', marginTop: 2 },
+  divider: { height: 1, backgroundColor: '#f0f0f0', marginBottom: 20 },
+
+  sectionLabel: { fontSize: 12, color: '#aaa', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
+  label: { fontSize: 12, color: '#aaa', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 },
+
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#eee', borderRadius: 12, marginBottom: 16, backgroundColor: '#fafafa' },
+  inputIcon: { paddingLeft: 14 },
+  input: { flex: 1, padding: 14, fontSize: 15, color: '#333' },
+  inputDirect: { borderWidth: 1.5, borderColor: '#eee', borderRadius: 12, padding: 14, marginBottom: 16, backgroundColor: '#fafafa', fontSize: 15, color: '#333' },
+  textArea: { height: 72, textAlignVertical: 'top' },
+
+  /* Chips */
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#eee', backgroundColor: '#fff' },
+  placeChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#eee', backgroundColor: '#fff', marginRight: 8 },
+  chipActive: { backgroundColor: '#E85D04', borderColor: '#E85D04' },
+  chipText: { fontSize: 13, color: '#666', fontWeight: '600' },
+  chipTextActive: { color: '#fff', fontWeight: '700' },
+
+  /* Botones modal */
+  saveBtn: { flexDirection: 'row', backgroundColor: '#E85D04', borderRadius: 14, height: 54, alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: '#E85D04', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6, marginBottom: 12 },
+  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  cancelBtn: { padding: 14, alignItems: 'center' },
+  cancelText: { color: '#aaa', fontSize: 15, fontWeight: '600' },
 });
 
 export default PromotionsTab;

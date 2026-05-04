@@ -104,7 +104,9 @@ const QuestionnaireScreen = ({ navigation }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [loading, setLoading]       = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const { user } = useAuth();
+
+  // ✅ FIX: importar refreshUser además de user
+  const { user, refreshUser } = useAuth();
 
   useEffect(() => { loadQuestions(); }, []);
 
@@ -137,7 +139,7 @@ const QuestionnaireScreen = ({ navigation }) => {
     setSubmitting(true);
     try {
       const formattedAnswers = Object.entries(answers).map(([questionId, optionId]) => {
-        const question = questions.find(q => q.id === parseInt(questionId));
+        const question       = questions.find(q => q.id === parseInt(questionId));
         const selectedOption = question.options.find(opt => opt.id === optionId);
         return { question_id: parseInt(questionId), answer: selectedOption.text };
       });
@@ -148,8 +150,14 @@ const QuestionnaireScreen = ({ navigation }) => {
       });
 
       if (response.data.success) {
+        // ✅ FIX: refrescar el usuario ANTES de volver a HomeScreen
+        //    Esto actualiza has_completed_questionnaire = true en el contexto,
+        //    de modo que HomeScreen pueda cargar las recomendaciones sin rebotar
+        //    de vuelta al cuestionario.
+        await refreshUser();
+
         Alert.alert('¡Listo!', 'Tus preferencias fueron guardadas', [
-          { text: 'Ver recomendaciones', onPress: () => navigation.goBack() }
+          { text: 'Ver recomendaciones', onPress: () => navigation.goBack() },
         ]);
       }
     } catch {

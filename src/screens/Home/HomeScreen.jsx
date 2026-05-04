@@ -134,20 +134,20 @@ const HomeScreen = ({ navigation }) => {
   );
 
   const loadRecommendations = async () => {
-    setLoading(true);
-    try {
-      const response = await getRecommendations(user.id);
-      if (response.success) setRecommendations(response.data);
-    } catch {
-      Alert.alert(
-        'Bienvenido',
-        'Primero responde el cuestionario para ver tus recomendaciones',
-        [{ text: 'Ir al cuestionario', onPress: () => navigation.navigate('Questionnaire') }]
-      );
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    const response = await getRecommendations(user.id);
+    if (response.success) {
+      setRecommendations(response.data);
     }
-  };
+    // Si success=false, simplemente queda en lista vacía (ya tiene UI para eso)
+  } catch {
+    // Solo errores inesperados llegan aquí
+    console.log('Error inesperado cargando recomendaciones');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const ListHeader = () => (
     <View style={styles.header}>

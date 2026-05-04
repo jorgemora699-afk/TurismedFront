@@ -3,7 +3,6 @@
 
   const API_URL = 'https://turismedback-production.up.railway.app';
 
- const API_URL = 'https://turismedback-production.up.railway.app';
 
   const client = axios.create({
     baseURL: API_URL,
